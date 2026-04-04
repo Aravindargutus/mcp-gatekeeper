@@ -22,8 +22,8 @@ export const ServerTargetSchema = z.object({
   url: z.string().optional(),
   headers: z.record(z.string()).default({}),
   env: z.record(z.string()).default({}),
-  connectTimeout: z.number().default(30_000),
-  requestTimeout: z.number().default(60_000),
+  connectTimeout: z.number().min(1_000).max(120_000).default(30_000),
+  requestTimeout: z.number().min(1_000).max(300_000).default(60_000),
   sessionId: z.string().optional(),
   skillPath: z.string().optional(),
   extensionPath: z.string().optional(),
@@ -34,8 +34,8 @@ export const PipelineConfigSchema = z.object({
     .object({
       mode: z.enum(["strict", "lenient"]).default("strict"),
       enabledGates: z.array(z.number().min(1).max(7)).default([1, 2, 3]),
-      timeoutSeconds: z.number().default(1800),
-      gateTimeoutSeconds: z.number().default(300),
+      timeoutSeconds: z.number().min(10).max(7200).default(1800),
+      gateTimeoutSeconds: z.number().min(5).max(3600).default(300),
     })
     .default({}),
   server: ServerTargetSchema.default({}),

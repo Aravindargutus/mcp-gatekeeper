@@ -3,6 +3,7 @@ import { join } from "path";
 import { BaseReporter } from "./base.reporter.js";
 import type { GateResult, PipelineReport, ValidatorResult } from "../core/types.js";
 import { Severity } from "../core/types.js";
+import { logger } from "../utils/logger.js";
 
 export class HtmlReporter extends BaseReporter {
   constructor(private readonly outputDir: string) {
@@ -14,11 +15,21 @@ export class HtmlReporter extends BaseReporter {
   onValidatorComplete(_result: ValidatorResult): void {}
 
   async finalize(report: PipelineReport): Promise<void> {
-    mkdirSync(this.outputDir, { recursive: true });
+    try {
+      mkdirSync(this.outputDir, { recursive: true });
+    } catch (err) {
+      logger.error(`Failed to create report directory: ${err instanceof Error ? err.message : String(err)}`);
+      return;
+    }
+
     const html = this.renderReport(report);
     const filename = `mcpqa-${report.pipelineId}.html`;
-    writeFileSync(join(this.outputDir, filename), html);
-    writeFileSync(join(this.outputDir, "latest.html"), html);
+    try {
+      writeFileSync(join(this.outputDir, filename), html);
+      writeFileSync(join(this.outputDir, "latest.html"), html);
+    } catch (err) {
+      logger.error(`Failed to write HTML report: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   private renderReport(report: PipelineReport): string {

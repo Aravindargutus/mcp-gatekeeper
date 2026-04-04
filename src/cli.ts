@@ -10,6 +10,7 @@ import { ConsoleReporter } from "./reporting/console.reporter.js";
 import { JsonReporter } from "./reporting/json.reporter.js";
 import { HtmlReporter } from "./reporting/html.reporter.js";
 import type { IReporter } from "./core/interfaces.js";
+import { setLogLevel, LogLevel } from "./utils/logger.js";
 
 const program = new Command();
 
@@ -32,8 +33,16 @@ program
   .option("--gates <numbers>", "Comma-separated gate numbers to run (e.g., 1,2,3,6,7)")
   .option("--mode <mode>", "Pipeline mode: strict or lenient", "strict")
   .option("--output-dir <dir>", "Report output directory", "./reports")
+  .option("--verbose", "Show detailed progress logs")
+  .option("--debug", "Show debug-level logs (most verbose)")
+  .option("--dry-run", "Validate config and show what would run without executing")
   .action(async (opts) => {
     try {
+      // Set log level
+      if (opts.debug) setLogLevel(LogLevel.DEBUG);
+      else if (opts.verbose) setLogLevel(LogLevel.INFO);
+      else setLogLevel(LogLevel.WARN);
+
       // Load config
       let config = opts.config
         ? loadConfig(opts.config)
@@ -103,9 +112,19 @@ program
       console.log(chalk.bold.cyan("\n╔══════════════════════════════════════╗"));
       console.log(chalk.bold.cyan("║       MCPQA — Pipeline Runner        ║"));
       console.log(chalk.bold.cyan("╚══════════════════════════════════════╝"));
-      console.log(`  Server: ${config.server.command ?? config.server.url ?? "mock"}`);
-      console.log(`  Gates:  ${config.pipeline.enabledGates.join(", ")}`);
-      console.log(`  Mode:   ${config.pipeline.mode}`);
+      console.log(`  Server:  ${config.server.command ?? config.server.url ?? "file-only"}`);
+      console.log(`  Gates:   ${config.pipeline.enabledGates.join(", ")}`);
+      console.log(`  Mode:    ${config.pipeline.mode}`);
+      if (config.server.skillPath) console.log(`  Skill:   ${config.server.skillPath}`);
+      if (config.server.extensionPath) console.log(`  Ext:     ${config.server.extensionPath}`);
+      console.log(`  Timeout: ${config.pipeline.timeoutSeconds}s pipeline, ${config.pipeline.gateTimeoutSeconds}s per gate`);
+
+      // Dry-run: show config and exit
+      if (opts.dryRun) {
+        console.log(chalk.yellow("\n  --dry-run: Config validated. Would run the above pipeline."));
+        console.log(`  Validators: ${gates.reduce((sum, g) => sum + g.validators.length, 0)} total`);
+        process.exit(0);
+      }
 
       // Run pipeline
       const report = await pipeline.run();

@@ -13,6 +13,7 @@
  */
 
 import { v4 as uuidv4 } from "uuid";
+import { logger } from "../utils/logger.js";
 import type { IGate, IMCPConnector, IReporter } from "./interfaces.js";
 import type { PipelineReport, GateResult } from "./types.js";
 import { Severity, worstSeverity, isBlocking } from "./types.js";
@@ -48,11 +49,20 @@ export class PipelineOrchestrator {
     const pipelineTimer = setTimeout(() => pipelineAbort.abort(), pipelineTimeoutMs);
 
     try {
-      const initResult = await connector.connect();
+      // Connect with timeout protection
+      logger.info(`Connecting to ${target.command ?? target.url ?? "server"} (${target.transport})`);
+      const connectTimeoutMs = target.connectTimeout ?? 30_000;
+      const initResult = await Promise.race([
+        connector.connect(),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Connection timed out after ${connectTimeoutMs}ms`)), connectTimeoutMs)
+        ),
+      ]);
       const ctx = new ValidationContext(connector, target, this.config);
       ctx.initializeResult = initResult;
       ctx.serverCapabilities = initResult.capabilities;
       ctx.toolDefinitions = await connector.listTools();
+      logger.info(`Connected. Found ${ctx.toolDefinitions.length} tools.`);
 
       const enabledGates = this.gates
         .filter((g) => this.config.pipeline.enabledGates.includes(g.gateNumber))
@@ -144,8 +154,16 @@ export class PipelineOrchestrator {
 
     report.completedAt = new Date().toISOString();
 
+    // Reporter isolation: each reporter runs independently so one failure doesn't block others
     for (const reporter of this.reporters) {
-      await reporter.finalize(report);
+      try {
+        await reporter.finalize(report);
+      } catch (err) {
+        // Log but don't throw — other reporters must still run
+        console.error(
+          `Reporter ${reporter.constructor.name} failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
     }
 
     return report;
