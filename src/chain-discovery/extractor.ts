@@ -163,15 +163,18 @@ function findAllCandidates(
     const lowerKey = key.toLowerCase().replace(/_/g, "");
     const path = `${currentPath}.${key}`;
 
-    // Match strategies:
+    // Match strategies (schema-driven, no hardcoded field names):
     // 1. Exact (case-insensitive, ignore underscores): "portal_id" matches "portalId"
     // 2. Contains: "portalId" contains "portal"
-    // 3. Ends with "id" when hint ends with "_id": "id" matches "portal_id" hint
+    // 3. Reverse contains: hint "portal_id" contains key "portal"
+    //
+    // NOTE: We do NOT match bare "id" against "portal_id" — that's ambiguous.
+    // If a nested object has just "id", it goes to Tier 3 (multiple candidates)
+    // and the Checker/LLM resolves which "id" is the right one.
     const isMatch =
       lowerKey === lowerHint ||
       lowerKey.includes(lowerHint) ||
-      lowerHint.includes(lowerKey) ||
-      (lowerHint.endsWith("id") && lowerKey === "id" && depth > 0);
+      (lowerHint.includes(lowerKey) && lowerKey.length > 2);
 
     if (isMatch && value != null && value !== "" && typeof value !== "object") {
       results.push({ value, path, depth });

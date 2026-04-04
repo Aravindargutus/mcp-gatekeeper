@@ -248,12 +248,13 @@ export class ChainGenerator {
   }
 
   private injectTestData(args: Record<string, unknown>, toolDef: ToolDefinition): void {
-    // Add MCPQA_TEST_ prefix to any name-like string fields
+    // Add MCPQA_TEST_ prefix to name-like string fields.
+    // Detection is schema-driven: check BOTH the key name AND the description.
     const properties = toolDef.inputSchema?.properties as Record<string, Record<string, unknown>> | undefined;
     if (!properties) return;
 
     for (const [key, schema] of Object.entries(properties)) {
-      if (schema.type === "string" && /\b(name|title|subject|label)\b/i.test(key)) {
+      if (schema.type === "string" && this.isNameLikeField(key, schema)) {
         if (typeof args[key] === "string") {
           args[key] = `${TEST_PREFIX}${args[key]}`;
         } else {
@@ -262,17 +263,36 @@ export class ChainGenerator {
       }
     }
 
-    // For nested "data" or "body" objects, do the same
+    // Apply to nested objects too (e.g., "data" or "body" wrappers)
     for (const [key, value] of Object.entries(args)) {
       if (value && typeof value === "object" && !Array.isArray(value)) {
         const obj = value as Record<string, unknown>;
+        const nestedSchema = properties[key];
+        const nestedProps = (nestedSchema?.properties ?? {}) as Record<string, Record<string, unknown>>;
         for (const [k, v] of Object.entries(obj)) {
-          if (typeof v === "string" && /\b(name|title|subject|label)\b/i.test(k)) {
+          if (typeof v === "string" && this.isNameLikeField(k, nestedProps[k] ?? {})) {
             obj[k] = `${TEST_PREFIX}${v}`;
           }
         }
       }
     }
+  }
+
+  /**
+   * Detect if a field is "name-like" using BOTH key name AND schema description.
+   * No hardcoded list of field names — reads what the schema tells us.
+   */
+  private isNameLikeField(key: string, schema: Record<string, unknown>): boolean {
+    const desc = ((schema.description as string) ?? "").toLowerCase();
+    const keyLower = key.toLowerCase();
+
+    // Check if the schema description indicates this is a name/label/title field
+    const descIndicatesName = /\b(name|title|label|subject|heading|display.?name|human.?readable)\b/.test(desc);
+
+    // Check if the key itself suggests it's a name field
+    const keyIndicatesName = /\b(name|title|subject|label|heading)\b/.test(keyLower);
+
+    return descIndicatesName || keyIndicatesName;
   }
 
   private generateSampleValue(schema: Record<string, unknown>): unknown {
