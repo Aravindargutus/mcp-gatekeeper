@@ -5,6 +5,7 @@ import { ResponseCompletenessValidator } from "./validators/response-completenes
 import { IntegrationReadinessValidator } from "./validators/integration-readiness.js";
 import { ErrorMessageQualityValidator } from "./validators/error-message-quality.js";
 import { ToolChainDiscoveryValidator } from "./validators/tool-chain-discovery.js";
+import { HolisticSummaryValidator } from "./validators/holistic-summary.js";
 
 export class SemanticGate extends BaseGate {
   readonly gateNumber = 4;
@@ -12,11 +13,14 @@ export class SemanticGate extends BaseGate {
 
   constructor() {
     super();
+    // Per-tool evaluators (run first, produce scores + fixes)
     this.registerValidator(new DescriptionAccuracyValidator());
     this.registerValidator(new ParamDocClarityValidator());
     this.registerValidator(new ResponseCompletenessValidator());
     this.registerValidator(new IntegrationReadinessValidator());
     this.registerValidator(new ErrorMessageQualityValidator());
     this.registerValidator(new ToolChainDiscoveryValidator());
+    // Holistic summary (runs LAST — cross-references all gates into one improvement plan)
+    this.registerValidator(new HolisticSummaryValidator());
   }
 }
