@@ -39,6 +39,8 @@ export class ValidationContext {
   public trials: number = 1;
   /** Shared transcript recorder for Gate 4 LLM conversations */
   public transcriptRecorder?: unknown;
+  /** Knowledge base from chain discovery (real IDs for tool invocation) */
+  public knowledgeBase?: unknown;
 
   constructor(
     public readonly connector: IMCPConnector,

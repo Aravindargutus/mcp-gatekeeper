@@ -73,6 +73,25 @@ export class PipelineOrchestrator {
 
       logger.info(`Connected. Found ${ctx.toolDefinitions.length} tools, ${ctx.resources.length} resources, ${ctx.prompts.length} prompts.`);
 
+      // Run chain discovery if Gate 3 or 4 is enabled and we have tools
+      const hasLiveGates = this.config.pipeline.enabledGates.some((g) => [3, 4].includes(g));
+      if (hasLiveGates && ctx.toolDefinitions.length > 0 && target.transport !== "null") {
+        try {
+          const { runChainDiscovery } = await import("../chain-discovery/index.js");
+          const semanticConfig = (this.config as Record<string, unknown>).semantic as Record<string, unknown> | undefined;
+          const kb = await runChainDiscovery(connector, ctx.toolDefinitions, {
+            cacheDir: ".mcpqa",
+            enableWriteTests: !!(this.config as Record<string, unknown>).enableWriteTests,
+            llmConfig: (this.config.gates[4]?.validators?.["llm"] ?? {}) as Record<string, unknown>,
+          });
+          // Attach knowledge base to context for Gate 3+4 validators
+          ctx.knowledgeBase = kb;
+          logger.info(`Chain discovery: ${Object.keys(kb.getAllSeedData()).length} real IDs available`);
+        } catch (err) {
+          logger.warn(`Chain discovery failed (will use sample data): ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
       const enabledGates = this.gates
         .filter((g) => this.config.pipeline.enabledGates.includes(g.gateNumber))
         .sort((a, b) => a.gateNumber - b.gateNumber);
