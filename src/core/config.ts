@@ -34,7 +34,7 @@ export const PipelineConfigSchema = z.object({
   pipeline: z
     .object({
       mode: z.enum(["strict", "lenient"]).default("strict"),
-      enabledGates: z.array(z.number().min(1).max(8)).default([1, 2, 3]),
+      enabledGates: z.array(z.number().min(1).max(10)).default([1, 2, 3]),
       timeoutSeconds: z.number().min(10).max(7200).default(1800),
       gateTimeoutSeconds: z.number().min(5).max(3600).default(300),
     })
@@ -50,6 +50,8 @@ export const PipelineConfigSchema = z.object({
       6: GateConfigSchema.default({}),
       7: GateConfigSchema.default({}),
       8: GateConfigSchema.default({}),
+      9: GateConfigSchema.default({}),
+      10: GateConfigSchema.default({}),
     })
     .default({}),
   reporting: z

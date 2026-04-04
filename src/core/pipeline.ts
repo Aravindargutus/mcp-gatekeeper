@@ -62,7 +62,16 @@ export class PipelineOrchestrator {
       ctx.initializeResult = initResult;
       ctx.serverCapabilities = initResult.capabilities;
       ctx.toolDefinitions = await connector.listTools();
-      logger.info(`Connected. Found ${ctx.toolDefinitions.length} tools.`);
+
+      // Fetch resources and prompts if the connector supports them
+      if (connector.listResources) {
+        try { ctx.resources = await connector.listResources(); } catch { /* optional */ }
+      }
+      if (connector.listPrompts) {
+        try { ctx.prompts = await connector.listPrompts(); } catch { /* optional */ }
+      }
+
+      logger.info(`Connected. Found ${ctx.toolDefinitions.length} tools, ${ctx.resources.length} resources, ${ctx.prompts.length} prompts.`);
 
       const enabledGates = this.gates
         .filter((g) => this.config.pipeline.enabledGates.includes(g.gateNumber))

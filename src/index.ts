@@ -38,6 +38,8 @@ export { ReviewGate } from "./gates/gate5-review/index.js";
 export { SkillsGate } from "./gates/gate6-skills/index.js";
 export { ExtensionsGate } from "./gates/gate7-extensions/index.js";
 export { PackageGate } from "./gates/gate8-package/index.js";
+export { ResourcesGate } from "./gates/gate9-resources/index.js";
+export { PromptsGate } from "./gates/gate10-prompts/index.js";
 
 // Reporters
 export { ConsoleReporter } from "./reporting/console.reporter.js";

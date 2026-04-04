@@ -92,6 +92,22 @@ export class StdioConnector extends BaseMCPConnector {
     return this.mapCallToolResult(result as unknown as Record<string, unknown>);
   }
 
+  async listResources(): Promise<Array<Record<string, unknown>>> {
+    this.ensureConnected();
+    try {
+      const result = await this.client!.listResources();
+      return (result.resources ?? []) as unknown as Array<Record<string, unknown>>;
+    } catch { return []; }
+  }
+
+  async listPrompts(): Promise<Array<Record<string, unknown>>> {
+    this.ensureConnected();
+    try {
+      const result = await this.client!.listPrompts();
+      return (result.prompts ?? []) as unknown as Array<Record<string, unknown>>;
+    } catch { return []; }
+  }
+
   async sendRawRequest(
     method: string,
     params?: Record<string, unknown>

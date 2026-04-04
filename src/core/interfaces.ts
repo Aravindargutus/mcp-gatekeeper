@@ -45,5 +45,9 @@ export interface IMCPConnector {
   listTools(): Promise<ToolDefinition[]>;
   callTool(name: string, args: Record<string, unknown>): Promise<ToolCallResult>;
   sendRawRequest(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  /** List MCP Resources (optional — returns empty if not supported) */
+  listResources?(): Promise<Array<Record<string, unknown>>>;
+  /** List MCP Prompts (optional — returns empty if not supported) */
+  listPrompts?(): Promise<Array<Record<string, unknown>>>;
   readonly isConnected: boolean;
 }

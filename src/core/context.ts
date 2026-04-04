@@ -31,6 +31,10 @@ export class ValidationContext {
   public extensionPath?: string;
   /** Path to an npm package directory (for Gate 8) */
   public packagePath?: string;
+  /** MCP Resources from the server (Gate 9) */
+  public resources: Array<Record<string, unknown>> = [];
+  /** MCP Prompts from the server (Gate 10) */
+  public prompts: Array<Record<string, unknown>> = [];
   /** Number of LLM trials for pass@k evaluation (Gate 4) */
   public trials: number = 1;
   /** Shared transcript recorder for Gate 4 LLM conversations */

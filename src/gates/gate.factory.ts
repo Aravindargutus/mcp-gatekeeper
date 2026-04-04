@@ -8,6 +8,8 @@ import { ExtensionsGate } from "./gate7-extensions/index.js";
 import { PackageGate } from "./gate8-package/index.js";
 import { SemanticGate } from "./gate4-semantic/index.js";
 import { ReviewGate } from "./gate5-review/index.js";
+import { ResourcesGate } from "./gate9-resources/index.js";
+import { PromptsGate } from "./gate10-prompts/index.js";
 
 const GATE_REGISTRY: Record<number, () => IGate> = {
   1: () => new SchemaGate(),
@@ -18,6 +20,8 @@ const GATE_REGISTRY: Record<number, () => IGate> = {
   6: () => new SkillsGate(),
   7: () => new ExtensionsGate(),
   8: () => new PackageGate(),
+  9: () => new ResourcesGate(),
+  10: () => new PromptsGate(),
 };
 
 export function createGates(config: PipelineConfig): IGate[] {

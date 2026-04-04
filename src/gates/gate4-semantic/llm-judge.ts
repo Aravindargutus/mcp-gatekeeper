@@ -133,13 +133,12 @@ EVALUATION RULES:
       };
     }
 
-    logger.debug(`Running ${trials} trials for pass@k evaluation`);
-    const results: JudgeVerdict[] = [];
+    logger.debug(`Running ${trials} trials in parallel for pass@k evaluation`);
 
-    for (let i = 0; i < trials; i++) {
-      const verdict = await this.evaluate(prompt);
-      results.push(verdict);
-    }
+    // Run all trials in parallel (they're independent)
+    const results = await Promise.all(
+      Array.from({ length: trials }, () => this.evaluate(prompt))
+    );
 
     return this.aggregateTrials(results);
   }
