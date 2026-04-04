@@ -1,0 +1,68 @@
+[
+  {
+    "name": "get_user",
+    "description": "Retrieve a user by their unique identifier. Returns the user's profile information including name, email, and creation date.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "user_id": {
+          "type": "string",
+          "description": "The unique identifier of the user to retrieve",
+          "maxLength": 64
+        }
+      },
+      "required": ["user_id"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "list_files",
+    "description": "List files in a directory. Returns an array of file metadata including name, size, and modification time.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Directory path to list files from",
+          "maxLength": 1024
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of files to return",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 1000
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "search_records",
+    "description": "Search for records matching a query string. Supports pagination via cursor parameter.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query text",
+          "maxLength": 512
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Pagination cursor from a previous search result"
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Number of results per page",
+          "default": 20,
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": ["query"],
+      "additionalProperties": false
+    }
+  }
+]

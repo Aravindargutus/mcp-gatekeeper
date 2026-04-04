@@ -1,0 +1,7 @@
+{
+  "name": "insecure-ext",
+  "version": "0.1.0",
+  "description": "An extension with security issues",
+  "author": "Test",
+  "permissions": ["*", "filesystem:*", "network:*"]
+}

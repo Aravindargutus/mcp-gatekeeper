@@ -1,0 +1,81 @@
+pipeline:
+  mode: strict
+  enabledGates: [1, 2, 3]
+  timeoutSeconds: 1800
+
+server:
+  transport: stdio
+  # command: "npx"
+  # args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+  connectTimeout: 30000
+  requestTimeout: 60000
+
+gates:
+  1:
+    enabled: true
+    failOnWarn: false
+    validators:
+      protocol-conformance:
+        enabled: true
+      tool-name:
+        enabled: true
+      tool-schema:
+        enabled: true
+      description-quality:
+        enabled: true
+        minLength: 20
+        maxLength: 2000
+      parameter-types:
+        enabled: true
+      jsonrpc-compliance:
+        enabled: true
+
+  2:
+    enabled: true
+    failOnWarn: false
+    validators:
+      prompt-injection:
+        enabled: true
+      ssrf-detector:
+        enabled: true
+      secret-scanner:
+        enabled: true
+      permission-scope:
+        enabled: true
+      dangerous-patterns:
+        enabled: true
+      input-sanitization:
+        enabled: true
+      rate-limit:
+        enabled: true
+      auth-check:
+        enabled: true
+
+  3:
+    enabled: true
+    failOnWarn: false
+    validators:
+      handshake:
+        enabled: true
+      tool-invocation:
+        enabled: true
+      boundary-testing:
+        enabled: true
+      error-format:
+        enabled: true
+      parameter-handling:
+        enabled: true
+      content-types:
+        enabled: true
+      pagination:
+        enabled: true
+      timeout:
+        enabled: true
+        timeoutMs: 30000
+      idempotency:
+        enabled: true
+        repeatCount: 3
+
+reporting:
+  formats: [console, json]
+  outputDir: ./reports

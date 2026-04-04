@@ -1,0 +1,7 @@
+{
+  "name": "test-extension",
+  "version": "1.0.0",
+  "description": "A test extension for validation",
+  "author": "Test Author",
+  "permissions": ["filesystem:read", "network:localhost"]
+}

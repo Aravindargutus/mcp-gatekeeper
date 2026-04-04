@@ -1,0 +1,75 @@
+[
+  {
+    "name": "tool with spaces",
+    "description": "This tool has an invalid name with spaces",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "",
+    "description": "Empty name tool",
+    "inputSchema": {
+      "type": "object"
+    }
+  },
+  {
+    "name": "missing_schema_tool",
+    "description": "This tool has no input schema"
+  },
+  {
+    "name": "bad_type_tool",
+    "description": "This tool has a parameter with invalid type",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "data": {
+          "type": "invalid_type",
+          "description": "Bad type"
+        }
+      }
+    }
+  },
+  {
+    "name": "required_mismatch",
+    "description": "Required array references non-existent property",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "A name"
+        }
+      },
+      "required": ["name", "nonexistent_field"]
+    }
+  },
+  {
+    "name": "no_description_tool",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "placeholder_desc",
+    "description": "TODO: add description here",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  },
+  {
+    "name": "short_desc",
+    "description": "Does stuff",
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    }
+  }
+]

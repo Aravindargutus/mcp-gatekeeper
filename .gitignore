@@ -1,0 +1,20 @@
+node_modules/
+dist/
+coverage/
+reports/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# IDE & tool configs
+.claude/
+.DS_Store
+*.tsbuildinfo
+*.log
+npm-debug.log*

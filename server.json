@@ -1,0 +1,42 @@
+{
+  "$schema": "https://registry.modelcontextprotocol.io/schema/server.json",
+  "name": "mcpqa",
+  "description": "MCP QA Framework — validate MCP servers, Claude Code skills, and extensions with a 5-gated pipeline (schema, security, functional, skills, extensions)",
+  "version": "0.1.0",
+  "repository": {
+    "type": "git",
+    "url": ""
+  },
+  "homepage": "",
+  "license": "MIT",
+  "tools": [
+    {
+      "name": "validate_mcp_server",
+      "description": "Run schema, security, and functional validation against an MCP server"
+    },
+    {
+      "name": "validate_skill",
+      "description": "Validate a Claude Code skill directory (SKILL.md, frontmatter, structure)"
+    },
+    {
+      "name": "validate_extension",
+      "description": "Validate a Claude Desktop extension (manifest, permissions, security)"
+    },
+    {
+      "name": "get_report",
+      "description": "Retrieve a previous validation report"
+    },
+    {
+      "name": "list_validators",
+      "description": "List all 34 validators across 5 gates"
+    }
+  ],
+  "transport": {
+    "stdio": {
+      "command": "npx",
+      "args": ["-y", "mcpqa-server"]
+    }
+  },
+  "categories": ["developer-tools", "testing", "security"],
+  "tags": ["qa", "validation", "testing", "security", "mcp", "compliance", "schema"]
+}
