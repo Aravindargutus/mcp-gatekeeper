@@ -9,6 +9,7 @@ import { createConnector } from "./connectors/factory.js";
 import { ConsoleReporter } from "./reporting/console.reporter.js";
 import { JsonReporter } from "./reporting/json.reporter.js";
 import { HtmlReporter } from "./reporting/html.reporter.js";
+import { SarifReporter } from "./reporting/sarif.reporter.js";
 import type { IReporter } from "./core/interfaces.js";
 import { setLogLevel, LogLevel } from "./utils/logger.js";
 
@@ -99,6 +100,9 @@ program
       if (config.reporting.formats.includes("html")) {
         reporters.push(new HtmlReporter(outputDir));
       }
+      if (config.reporting.formats.includes("sarif")) {
+        reporters.push(new SarifReporter(outputDir));
+      }
 
       // Create gates and pipeline
       const gates = createGates(config);
@@ -152,6 +156,21 @@ program
       console.log(`  Transport: ${config.server.transport}`);
     } catch (err) {
       console.error(chalk.red(`Invalid config: ${err instanceof Error ? err.message : String(err)}`));
+      process.exit(1);
+    }
+  });
+
+program
+  .command("diff")
+  .description("Compare two MCPQA reports and show what changed")
+  .argument("<before>", "Path to the earlier report JSON")
+  .argument("<after>", "Path to the later report JSON")
+  .action((beforePath, afterPath) => {
+    try {
+      const { diffReports } = require("./diff.js");
+      console.log(diffReports(beforePath, afterPath));
+    } catch (err) {
+      console.error(chalk.red(`Diff failed: ${err instanceof Error ? err.message : String(err)}`));
       process.exit(1);
     }
   });

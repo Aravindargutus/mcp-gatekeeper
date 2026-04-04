@@ -41,9 +41,12 @@ export { ConsoleReporter } from "./reporting/console.reporter.js";
 export { JsonReporter } from "./reporting/json.reporter.js";
 export { HtmlReporter } from "./reporting/html.reporter.js";
 export { BufferReporter } from "./reporting/buffer.reporter.js";
+export { SarifReporter } from "./reporting/sarif.reporter.js";
+export { CheckpointReporter } from "./reporting/checkpoint.reporter.js";
 
 // Utilities
 export { parseFrontmatter, countWords } from "./utils/frontmatter.js";
+export { diffReports } from "./diff.js";
 
 // Errors
 export {

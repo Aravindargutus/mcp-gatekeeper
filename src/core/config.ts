@@ -53,7 +53,7 @@ export const PipelineConfigSchema = z.object({
   reporting: z
     .object({
       formats: z
-        .array(z.enum(["json", "html", "console"]))
+        .array(z.enum(["json", "html", "console", "sarif"]))
         .default(["console", "json"]),
       outputDir: z.string().default("./reports"),
     })
