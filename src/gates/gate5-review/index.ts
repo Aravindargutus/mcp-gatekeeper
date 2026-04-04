@@ -24,7 +24,7 @@ export class ReviewGate extends BaseGate {
       (g) => g.severity === Severity.PASS || g.severity === Severity.SKIP
     );
 
-    const autoApproveThreshold = 4.5;
+    const autoApproveThreshold = ((ctx.config as Record<string, unknown>).semantic as Record<string, unknown>)?.autoApproveThreshold as number ?? 4.5;
     const gate4 = ctx.gateResults.find((g) => g.gateNumber === 4);
     const semanticScores = gate4?.validatorResults
       .filter((v) => v.details.avgScore !== undefined)

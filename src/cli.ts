@@ -38,6 +38,7 @@ program
   .option("--verbose", "Show detailed progress logs")
   .option("--debug", "Show debug-level logs (most verbose)")
   .option("--dry-run", "Validate config and show what would run without executing")
+  .option("--trials <number>", "Number of LLM evaluation trials for pass@k (Gate 4)", "1")
   .option("--save-baseline", "Save results as baseline for future regression checks")
   .option("--check-regression", "Compare results against saved baseline")
   .action(async (opts) => {

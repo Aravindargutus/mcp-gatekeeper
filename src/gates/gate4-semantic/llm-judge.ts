@@ -213,10 +213,19 @@ EVALUATION RULES:
   }
 
   private parseVerdict(text: string): JudgeVerdict {
+    if (!text || text.trim().length === 0) {
+      logger.warn("LLM returned empty response — scoring as 0");
+      return { score: 0, reasoning: "LLM returned empty response", verdict: "fail", fixes: [] };
+    }
+
     const scoreMatch = text.match(/SCORE:\s*(\d)/);
     const reasoningMatch = text.match(/REASONING:\s*(.+?)(?=\n(?:FIXES|VERDICT):|$)/s);
     const verdictMatch = text.match(/VERDICT:\s*(pass|warn|fail)/i);
     const fixesMatch = text.match(/FIXES:\s*(.+?)(?=\nVERDICT:|$)/s);
+
+    if (!scoreMatch) {
+      logger.warn(`LLM response missing SCORE field — could not parse structured output. First 100 chars: "${text.substring(0, 100)}"`);
+    }
 
     const score = scoreMatch ? parseInt(scoreMatch[1], 10) : 0;
     const reasoning = reasoningMatch ? reasoningMatch[1].trim() : text.substring(0, 500);

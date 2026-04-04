@@ -58,6 +58,15 @@ export const PipelineConfigSchema = z.object({
         .array(z.enum(["json", "html", "console", "sarif"]))
         .default(["console", "json"]),
       outputDir: z.string().default("./reports"),
+      transcriptDir: z.string().default("./reports/transcripts"),
+    })
+    .default({}),
+  semantic: z
+    .object({
+      /** Number of LLM trials per tool for pass@k evaluation */
+      trials: z.number().min(1).max(5).default(1),
+      /** Auto-approve threshold for Gate 5 (avg Gate 4 score) */
+      autoApproveThreshold: z.number().min(1).max(5).default(4.5),
     })
     .default({}),
 });

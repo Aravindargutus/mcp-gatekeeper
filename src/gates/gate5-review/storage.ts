@@ -67,11 +67,14 @@ export class ReviewStorage {
   }
 
   createReview(report: PipelineReport): void {
-    this.db.prepare(
-      "INSERT OR REPLACE INTO reviews (pipeline_id, report_json, server_target, overall_severity) VALUES (?, ?, ?, ?)"
-    ).run(report.pipelineId, JSON.stringify(report), report.serverTarget, report.overallSeverity);
-
-    this.addAuditEntry(report.pipelineId, "created", "system", "Review created");
+    try {
+      this.db.prepare(
+        "INSERT OR REPLACE INTO reviews (pipeline_id, report_json, server_target, overall_severity) VALUES (?, ?, ?, ?)"
+      ).run(report.pipelineId, JSON.stringify(report), report.serverTarget, report.overallSeverity);
+      this.addAuditEntry(report.pipelineId, "created", "system", "Review created");
+    } catch (err) {
+      throw new Error(`Failed to create review: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   getReview(pipelineId: string): ReviewRecord | undefined {
@@ -86,24 +89,36 @@ export class ReviewStorage {
   }
 
   approve(pipelineId: string, reviewer: string, comments?: string): void {
-    this.db.prepare(
-      "UPDATE reviews SET status = 'approved', reviewer = ?, decision_at = datetime('now'), comments = ? WHERE pipeline_id = ?"
-    ).run(reviewer, comments ?? null, pipelineId);
-    this.addAuditEntry(pipelineId, "approved", reviewer, comments);
+    try {
+      this.db.prepare(
+        "UPDATE reviews SET status = 'approved', reviewer = ?, decision_at = datetime('now'), comments = ? WHERE pipeline_id = ?"
+      ).run(reviewer, comments ?? null, pipelineId);
+      this.addAuditEntry(pipelineId, "approved", reviewer, comments);
+    } catch (err) {
+      throw new Error(`Failed to approve review: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   reject(pipelineId: string, reviewer: string, reason: string): void {
-    this.db.prepare(
-      "UPDATE reviews SET status = 'rejected', reviewer = ?, decision_at = datetime('now'), comments = ? WHERE pipeline_id = ?"
-    ).run(reviewer, reason, pipelineId);
-    this.addAuditEntry(pipelineId, "rejected", reviewer, reason);
+    try {
+      this.db.prepare(
+        "UPDATE reviews SET status = 'rejected', reviewer = ?, decision_at = datetime('now'), comments = ? WHERE pipeline_id = ?"
+      ).run(reviewer, reason, pipelineId);
+      this.addAuditEntry(pipelineId, "rejected", reviewer, reason);
+    } catch (err) {
+      throw new Error(`Failed to reject review: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   escalate(pipelineId: string, reviewer: string, reason?: string): void {
-    this.db.prepare(
-      "UPDATE reviews SET status = 'escalated', reviewer = ?, comments = ? WHERE pipeline_id = ?"
-    ).run(reviewer, reason ?? null, pipelineId);
-    this.addAuditEntry(pipelineId, "escalated", reviewer, reason);
+    try {
+      this.db.prepare(
+        "UPDATE reviews SET status = 'escalated', reviewer = ?, comments = ? WHERE pipeline_id = ?"
+      ).run(reviewer, reason ?? null, pipelineId);
+      this.addAuditEntry(pipelineId, "escalated", reviewer, reason);
+    } catch (err) {
+      throw new Error(`Failed to escalate review: ${err instanceof Error ? err.message : String(err)}`);
+    }
   }
 
   getAuditLog(pipelineId?: string): AuditEntry[] {
