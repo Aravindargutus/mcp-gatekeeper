@@ -31,6 +31,7 @@ program
   .option("--headers <json>", "HTTP headers as JSON string (for http/sse transport)")
   .option("--skill-path <path>", "Path to Claude Code skill directory (runs Gate 6)")
   .option("--extension-path <path>", "Path to extension directory (runs Gate 7)")
+  .option("--package-path <path>", "Path to npm package directory (runs Gate 8)")
   .option("--gates <numbers>", "Comma-separated gate numbers to run (e.g., 1,2,3,6,7)")
   .option("--mode <mode>", "Pipeline mode: strict or lenient", "strict")
   .option("--output-dir <dir>", "Report output directory", "./reports")
@@ -78,11 +79,12 @@ program
         headers,
         skillPath: opts.skillPath,
         extensionPath: opts.extensionPath,
+        packagePath: opts.packagePath,
       });
 
       // Validate we have at least one target
       const hasServerTarget = config.server.command || config.server.url;
-      const hasFileTarget = config.server.skillPath || config.server.extensionPath;
+      const hasFileTarget = config.server.skillPath || config.server.extensionPath || config.server.packagePath;
       if (!hasServerTarget && !hasFileTarget && config.server.transport !== "mock") {
         console.error(
           chalk.red("Error: No target specified. Use --server-cmd, --server-url, --skill-path, --extension-path, or --config")

@@ -29,6 +29,8 @@ export class ValidationContext {
   public skillPath?: string;
   /** Path to a Claude Desktop extension directory (for Gate 7) */
   public extensionPath?: string;
+  /** Path to an npm package directory (for Gate 8) */
+  public packagePath?: string;
 
   constructor(
     public readonly connector: IMCPConnector,
@@ -37,6 +39,7 @@ export class ValidationContext {
   ) {
     this.skillPath = serverTarget.skillPath;
     this.extensionPath = serverTarget.extensionPath;
+    this.packagePath = serverTarget.packagePath;
   }
 
   addGateResult(result: GateResult): void {

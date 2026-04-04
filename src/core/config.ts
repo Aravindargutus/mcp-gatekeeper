@@ -27,13 +27,14 @@ export const ServerTargetSchema = z.object({
   sessionId: z.string().optional(),
   skillPath: z.string().optional(),
   extensionPath: z.string().optional(),
+  packagePath: z.string().optional(),
 });
 
 export const PipelineConfigSchema = z.object({
   pipeline: z
     .object({
       mode: z.enum(["strict", "lenient"]).default("strict"),
-      enabledGates: z.array(z.number().min(1).max(7)).default([1, 2, 3]),
+      enabledGates: z.array(z.number().min(1).max(8)).default([1, 2, 3]),
       timeoutSeconds: z.number().min(10).max(7200).default(1800),
       gateTimeoutSeconds: z.number().min(5).max(3600).default(300),
     })
@@ -48,6 +49,7 @@ export const PipelineConfigSchema = z.object({
       5: GateConfigSchema.default({}),
       6: GateConfigSchema.default({}),
       7: GateConfigSchema.default({}),
+      8: GateConfigSchema.default({}),
     })
     .default({}),
   reporting: z
@@ -94,6 +96,7 @@ export function mergeConfigWithCLI(
     headers?: Record<string, string>;
     skillPath?: string;
     extensionPath?: string;
+    packagePath?: string;
   }
 ): PipelineConfig {
   const merged = structuredClone(config);
@@ -132,6 +135,12 @@ export function mergeConfigWithCLI(
   }
   if (overrides.extensionPath) {
     merged.server.extensionPath = overrides.extensionPath;
+    if (!overrides.serverCmd && !overrides.serverUrl) {
+      merged.server.transport = "null";
+    }
+  }
+  if (overrides.packagePath) {
+    merged.server.packagePath = overrides.packagePath;
     if (!overrides.serverCmd && !overrides.serverUrl) {
       merged.server.transport = "null";
     }

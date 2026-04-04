@@ -139,6 +139,36 @@ server.tool(
   }
 );
 
+// ── Tool: validate_package ──────────────────────────────────────────────
+
+server.tool(
+  "validate_package",
+  "Validate an npm package directory before publishing. Checks package.json, server.json, LICENSE, dependencies, and security.",
+  {
+    path: z.string().min(1).max(4096).describe("Absolute path to the npm package directory"),
+  },
+  async (params) => {
+    const pathCheck = validatePath(params.path);
+    if (!pathCheck.valid) {
+      return { content: [{ type: "text" as const, text: pathCheck.error! }], isError: true };
+    }
+    const config = mergeConfigWithCLI(PipelineConfigSchema.parse({}), {
+      packagePath: pathCheck.resolved,
+      gates: [8],
+      transport: "null",
+    });
+
+    const gates = createGates(config);
+    const reporter = new BufferReporter(reportStore);
+    const pipeline = new PipelineOrchestrator(config, gates, [reporter], createConnector);
+    const report = await pipeline.run();
+
+    return {
+      content: [{ type: "text" as const, text: formatReport(report) }],
+    };
+  }
+);
+
 // ── Tool: get_report ───────────────────────────────────────────────────
 
 server.tool(
@@ -179,7 +209,7 @@ server.tool(
   {},
   async () => {
     const config = PipelineConfigSchema.parse({
-      pipeline: { enabledGates: [1, 2, 3, 6, 7] },
+      pipeline: { enabledGates: [1, 2, 3, 6, 7, 8] },
     });
     const gates = createGates(config);
 

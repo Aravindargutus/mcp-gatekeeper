@@ -5,6 +5,7 @@ import { SecurityGate } from "./gate2-security/index.js";
 import { FunctionalGate } from "./gate3-functional/index.js";
 import { SkillsGate } from "./gate6-skills/index.js";
 import { ExtensionsGate } from "./gate7-extensions/index.js";
+import { PackageGate } from "./gate8-package/index.js";
 
 const GATE_REGISTRY: Record<number, () => IGate> = {
   1: () => new SchemaGate(),
@@ -12,6 +13,7 @@ const GATE_REGISTRY: Record<number, () => IGate> = {
   3: () => new FunctionalGate(),
   6: () => new SkillsGate(),
   7: () => new ExtensionsGate(),
+  8: () => new PackageGate(),
 };
 
 export function createGates(config: PipelineConfig): IGate[] {
