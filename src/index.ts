@@ -33,6 +33,8 @@ export { createGates } from "./gates/gate.factory.js";
 export { SchemaGate } from "./gates/gate1-schema/index.js";
 export { SecurityGate } from "./gates/gate2-security/index.js";
 export { FunctionalGate } from "./gates/gate3-functional/index.js";
+export { SemanticGate } from "./gates/gate4-semantic/index.js";
+export { ReviewGate } from "./gates/gate5-review/index.js";
 export { SkillsGate } from "./gates/gate6-skills/index.js";
 export { ExtensionsGate } from "./gates/gate7-extensions/index.js";
 export { PackageGate } from "./gates/gate8-package/index.js";

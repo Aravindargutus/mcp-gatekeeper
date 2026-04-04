@@ -6,11 +6,15 @@ import { FunctionalGate } from "./gate3-functional/index.js";
 import { SkillsGate } from "./gate6-skills/index.js";
 import { ExtensionsGate } from "./gate7-extensions/index.js";
 import { PackageGate } from "./gate8-package/index.js";
+import { SemanticGate } from "./gate4-semantic/index.js";
+import { ReviewGate } from "./gate5-review/index.js";
 
 const GATE_REGISTRY: Record<number, () => IGate> = {
   1: () => new SchemaGate(),
   2: () => new SecurityGate(),
   3: () => new FunctionalGate(),
+  4: () => new SemanticGate(),
+  5: () => new ReviewGate(),
   6: () => new SkillsGate(),
   7: () => new ExtensionsGate(),
   8: () => new PackageGate(),

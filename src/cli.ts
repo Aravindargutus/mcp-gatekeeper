@@ -177,4 +177,14 @@ program
     }
   });
 
+program
+  .command("dashboard")
+  .description("Launch the human review dashboard")
+  .option("--port <number>", "Port to listen on", "8080")
+  .option("--db-dir <path>", "Database directory", "./data")
+  .action((opts) => {
+    const { startDashboard } = require("./gates/gate5-review/app.js");
+    startDashboard(parseInt(opts.port, 10), opts.dbDir);
+  });
+
 program.parse();
