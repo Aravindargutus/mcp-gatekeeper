@@ -38,6 +38,8 @@ program
   .option("--verbose", "Show detailed progress logs")
   .option("--debug", "Show debug-level logs (most verbose)")
   .option("--dry-run", "Validate config and show what would run without executing")
+  .option("--save-baseline", "Save results as baseline for future regression checks")
+  .option("--check-regression", "Compare results against saved baseline")
   .action(async (opts) => {
     try {
       // Set log level
@@ -134,7 +136,30 @@ program
 
       // Run pipeline
       const report = await pipeline.run();
-      const exitCode = pipeline.getExitCode(report);
+      let exitCode = pipeline.getExitCode(report);
+
+      // Regression tracking
+      if (opts.saveBaseline || opts.checkRegression) {
+        const { RegressionTracker } = await import("./regression.js");
+        const tracker = new RegressionTracker(outputDir);
+
+        if (opts.saveBaseline) {
+          tracker.saveBaseline(report);
+          console.log(chalk.green("\n  ✓ Baseline saved for future regression checks"));
+        }
+
+        if (opts.checkRegression) {
+          const baseline = tracker.loadBaseline(report.serverTarget);
+          if (baseline) {
+            const result = tracker.checkRegression(report, baseline);
+            console.log(tracker.formatResult(result));
+            if (result.hasRegressions) exitCode = 1;
+          } else {
+            console.log(chalk.yellow("\n  No baseline found. Run with --save-baseline first."));
+          }
+        }
+      }
+
       process.exit(exitCode);
     } catch (err) {
       console.error(chalk.red(`\nFatal error: ${err instanceof Error ? err.message : String(err)}`));

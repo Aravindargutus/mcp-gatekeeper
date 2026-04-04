@@ -50,6 +50,10 @@ export { CheckpointReporter } from "./reporting/checkpoint.reporter.js";
 // Utilities
 export { parseFrontmatter, countWords } from "./utils/frontmatter.js";
 export { diffReports } from "./diff.js";
+export { RegressionTracker } from "./regression.js";
+export { LLMJudge } from "./gates/gate4-semantic/llm-judge.js";
+export type { JudgeVerdict, TrialResult, LLMJudgeConfig } from "./gates/gate4-semantic/llm-judge.js";
+export { TranscriptRecorder } from "./gates/gate4-semantic/transcript.js";
 
 // Errors
 export {

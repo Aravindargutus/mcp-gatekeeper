@@ -41,6 +41,21 @@ export interface ValidatorResult {
   details: Record<string, unknown>;
   durationMs: number;
   evidence: string[];
+  /**
+   * Partial credit score 0.0-1.0 (optional).
+   * A tool with 4/5 correct params = 0.8 partial credit.
+   * Provides gradient for improvement vs binary pass/fail.
+   * From Anthropic's eval framework: "partial credit for multi-component tasks."
+   */
+  partialCredit?: number;
+  /** pass@k metrics for LLM-based validators (multi-trial) */
+  trialMetrics?: {
+    passAtK: number;
+    passAllK: number;
+    medianScore: number;
+    variance: number;
+    trialCount: number;
+  };
 }
 
 export interface GateResult {

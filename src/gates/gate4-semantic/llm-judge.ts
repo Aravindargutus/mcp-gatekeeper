@@ -9,6 +9,8 @@ export interface LLMJudgeConfig {
   baseUrl?: string;
   temperature?: number;
   maxTokens?: number;
+  /** Number of trials per evaluation for pass@k/pass^k (default: 1) */
+  trials?: number;
 }
 
 export interface JudgeVerdict {
@@ -17,6 +19,24 @@ export interface JudgeVerdict {
   verdict: "pass" | "warn" | "fail";
   fixes: string[];
   raw?: string;
+}
+
+/** Multi-trial result with pass@k and pass^k metrics */
+export interface TrialResult {
+  /** All individual trial verdicts */
+  trials: JudgeVerdict[];
+  /** Median score across trials (robust to outliers) */
+  medianScore: number;
+  /** pass@k: probability of at least one success in k trials */
+  passAtK: number;
+  /** pass^k: probability ALL trials succeed (reliability metric) */
+  passAllK: number;
+  /** Consensus verdict from majority of trials */
+  consensusVerdict: "pass" | "warn" | "fail";
+  /** Merged fix list (deduplicated) from all trials */
+  fixes: string[];
+  /** Score variance — high variance means evaluator or tool is flaky */
+  variance: number;
 }
 
 const DEFAULT_CONFIG: LLMJudgeConfig = {
@@ -65,6 +85,7 @@ EVALUATION RULES:
     }
   }
 
+  /** Single evaluation (backward compatible) */
   async evaluate(prompt: string): Promise<JudgeVerdict> {
     logger.debug(`LLM Judge evaluating (${this.config.provider}/${this.config.model})`);
     const startTime = Date.now();
@@ -85,6 +106,82 @@ EVALUATION RULES:
         fixes: [],
       };
     }
+  }
+
+  /**
+   * Multi-trial evaluation with pass@k and pass^k metrics.
+   * Runs the same prompt k times and aggregates results.
+   *
+   * From Anthropic's eval framework:
+   * - pass@k measures "can this tool pass at all?" (at least one success)
+   * - pass^k measures "is this tool reliably good?" (all trials succeed)
+   * - High variance between trials indicates flaky tool or evaluator
+   */
+  async evaluateWithTrials(prompt: string, k?: number): Promise<TrialResult> {
+    const trials = k ?? this.config.trials ?? 1;
+
+    if (trials <= 1) {
+      const verdict = await this.evaluate(prompt);
+      return {
+        trials: [verdict],
+        medianScore: verdict.score,
+        passAtK: verdict.verdict === "pass" ? 1 : 0,
+        passAllK: verdict.verdict === "pass" ? 1 : 0,
+        consensusVerdict: verdict.verdict,
+        fixes: verdict.fixes,
+        variance: 0,
+      };
+    }
+
+    logger.debug(`Running ${trials} trials for pass@k evaluation`);
+    const results: JudgeVerdict[] = [];
+
+    for (let i = 0; i < trials; i++) {
+      const verdict = await this.evaluate(prompt);
+      results.push(verdict);
+    }
+
+    return this.aggregateTrials(results);
+  }
+
+  private aggregateTrials(trials: JudgeVerdict[]): TrialResult {
+    const scores = trials.map((t) => t.score).sort((a, b) => a - b);
+    const medianScore = scores[Math.floor(scores.length / 2)];
+
+    // pass@k: at least one trial has verdict "pass"
+    const passCount = trials.filter((t) => t.verdict === "pass").length;
+    const passAtK = passCount > 0 ? 1 : 0;
+
+    // pass^k: ALL trials have verdict "pass"
+    const passAllK = passCount === trials.length ? 1 : 0;
+
+    // Consensus: majority verdict
+    const verdictCounts = { pass: 0, warn: 0, fail: 0 };
+    for (const t of trials) verdictCounts[t.verdict]++;
+    const consensusVerdict =
+      verdictCounts.fail > trials.length / 2 ? "fail" as const
+        : verdictCounts.pass > trials.length / 2 ? "pass" as const
+          : "warn" as const;
+
+    // Variance (how much scores disagree)
+    const mean = scores.reduce((a, b) => a + b, 0) / scores.length;
+    const variance = scores.reduce((sum, s) => sum + (s - mean) ** 2, 0) / scores.length;
+
+    // Deduplicate fixes across trials
+    const fixSet = new Set<string>();
+    for (const t of trials) {
+      for (const fix of t.fixes) fixSet.add(fix);
+    }
+
+    return {
+      trials,
+      medianScore,
+      passAtK,
+      passAllK,
+      consensusVerdict,
+      fixes: [...fixSet],
+      variance,
+    };
   }
 
   private async callAnthropic(prompt: string): Promise<string> {
