@@ -8,9 +8,12 @@ import { descriptionAccuracyPrompt } from "../prompts.js";
 export class DescriptionAccuracyValidator implements IValidator {
   readonly name = "description-accuracy";
   readonly description = "Uses LLM to compare tool descriptions against actual invocation behavior";
-  readonly dependencies = ["tool-invocation"];
+  // No within-gate dependency — reads ctx.invocationResults populated by Gate 3
 
   async validate(ctx: ValidationContext): Promise<ValidatorResult> {
+    if (ctx.invocationResults.size === 0) {
+      return { validatorName: this.name, severity: Severity.SKIP, message: "No invocation results — run Gate 3 first", details: {}, durationMs: 0, evidence: [] };
+    }
     const evidence: string[] = [];
     const scores: number[] = [];
     const gateConfig = ctx.config.gates[4]?.validators?.["description-accuracy"] ?? {};

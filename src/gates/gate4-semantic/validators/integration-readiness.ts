@@ -8,9 +8,12 @@ import { integrationReadinessPrompt } from "../prompts.js";
 export class IntegrationReadinessValidator implements IValidator {
   readonly name = "integration-readiness";
   readonly description = "Uses LLM to evaluate if a developer could integrate from metadata alone";
-  readonly dependencies = ["tool-invocation"];
+  // Reads ctx.invocationResults populated by Gate 3
 
   async validate(ctx: ValidationContext): Promise<ValidatorResult> {
+    if (ctx.invocationResults.size === 0 && ctx.toolDefinitions.length === 0) {
+      return { validatorName: this.name, severity: Severity.SKIP, message: "No tools to evaluate", details: {}, durationMs: 0, evidence: [] };
+    }
     const evidence: string[] = [];
     const scores: number[] = [];
     const llmConfig = (ctx.config.gates[4]?.validators?.["llm"] ?? {}) as Partial<LLMJudgeConfig>;

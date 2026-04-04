@@ -8,7 +8,7 @@ import { errorMessageQualityPrompt } from "../prompts.js";
 export class ErrorMessageQualityValidator implements IValidator {
   readonly name = "error-message-quality";
   readonly description = "Uses LLM to evaluate whether error messages are actionable";
-  readonly dependencies = ["boundary-testing"];
+  // Reads ctx.errorResponses populated by Gate 3's boundary testing
 
   async validate(ctx: ValidationContext): Promise<ValidatorResult> {
     const evidence: string[] = [];

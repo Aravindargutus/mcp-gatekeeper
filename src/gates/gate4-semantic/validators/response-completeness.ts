@@ -8,9 +8,12 @@ import { responseCompletenessPrompt } from "../prompts.js";
 export class ResponseCompletenessValidator implements IValidator {
   readonly name = "response-completeness";
   readonly description = "Uses LLM to evaluate if responses contain all promised data";
-  readonly dependencies = ["tool-invocation"];
+  // Reads ctx.invocationResults populated by Gate 3
 
   async validate(ctx: ValidationContext): Promise<ValidatorResult> {
+    if (ctx.invocationResults.size === 0) {
+      return { validatorName: this.name, severity: Severity.SKIP, message: "No invocation results — run Gate 3 first", details: {}, durationMs: 0, evidence: [] };
+    }
     const evidence: string[] = [];
     const scores: number[] = [];
     const llmConfig = (ctx.config.gates[4]?.validators?.["llm"] ?? {}) as Partial<LLMJudgeConfig>;
