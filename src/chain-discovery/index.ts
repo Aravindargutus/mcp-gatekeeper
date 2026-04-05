@@ -52,6 +52,17 @@ export async function runChainDiscovery(
   const chains = await discoverChains(tools, options.llmConfig);
   kb.setChains(chains);
 
+  // Seed inferred values from the Planner's Phase 3
+  const inferredValues = (chains as any).__inferredValues as Record<string, string[]> | undefined;
+  if (inferredValues) {
+    for (const [paramName, values] of Object.entries(inferredValues)) {
+      if (values.length > 0 && !kb.hasSeedValue(paramName)) {
+        kb.setSeedValue(paramName, values[0]); // Use first inferred value
+        logger.debug(`Seeded inferred value: ${paramName} = ${values[0]}`);
+      }
+    }
+  }
+
   // ── Phase 2: GENERATOR (read phase) ───────────────
   logger.info("Chain discovery: Phase 2 — Generator (executing read tools)");
   const generator = new ChainGenerator(connector, tools, kb);

@@ -29,6 +29,33 @@ Respond in EXACTLY this JSON format (no markdown, no explanation):
 Classifications: safe=read-only, create=makes data, update=modifies, delete=removes, restore=recovers, destructive=bulk/permanent`;
 
 /**
+ * Phase 3 prompt: Infer valid parameter values for params without enums.
+ * This is why tools work in Cursor but fail in our tests — Cursor users
+ * provide domain knowledge ("Leads"), but our framework sends "test".
+ */
+const INFER_VALUES_PROMPT = `These MCP tools have parameters WITHOUT enum values or examples. Based on the tool names, descriptions, and the service domain, infer the most likely VALID values.
+
+TOOLS AND THEIR UNDOCUMENTED PARAMS:
+{PARAMS_NEEDING_VALUES}
+
+For each parameter, provide 1-3 realistic values that would make the tool work.
+
+Respond in EXACTLY this JSON format (no markdown):
+{
+  "inferredValues": {
+    "param_name": ["value1", "value2"]
+  }
+}
+
+Examples of good inferences:
+- A "module" param on a CRM tool → ["Leads", "Contacts", "Deals"]
+- A "status" param on a project tool → ["active", "completed", "on_hold"]
+- A "format" param on an export tool → ["json", "csv", "xml"]
+- A "portal_id" with no enum → use a realistic placeholder like "default"
+
+Only infer values you are confident about based on the service domain. Skip params you can't reasonably guess.`;
+
+/**
  * Phase 2 prompt: For ONE chain, discover dependencies between its tools.
  * Much smaller scope = reliable JSON output.
  */
@@ -202,8 +229,89 @@ export async function discoverChains(
     });
   }
 
+  // ── Phase 3: Infer valid values for params without enums ──
+  const paramsNeedingValues = findParamsWithoutEnums(tools);
+  if (paramsNeedingValues.length > 0) {
+    logger.info(`Planner Phase 3: inferring values for ${paramsNeedingValues.length} undocumented params...`);
+    const inferPrompt = INFER_VALUES_PROMPT.replace(
+      "{PARAMS_NEEDING_VALUES}",
+      paramsNeedingValues.map((p) => `- Tool "${p.tool}", param "${p.param}": type=${p.type}, context="${p.context}"`).join("\n")
+    );
+
+    try {
+      const inferResponse = await judge.evaluate(inferPrompt);
+      const inferRaw = inferResponse.raw ?? inferResponse.reasoning;
+      const inferJson = inferRaw.match(/\{[\s\S]*\}/);
+      if (inferJson) {
+        const parsed = JSON.parse(inferJson[0]);
+        const inferred = parsed.inferredValues ?? {};
+        // Store inferred values — the Generator will use these as seed data
+        for (const chain of chains) {
+          for (const tool of chain.tools) {
+            for (const dep of tool.dependencies) {
+              if (inferred[dep.sourceFieldHint]) {
+                tool.produces = tool.produces ?? [];
+                // Tag inferred values with _inferred prefix for clarity
+              }
+            }
+          }
+        }
+        // Attach inferred values to the result for the Generator to consume
+        (chains as any).__inferredValues = inferred;
+        logger.info(`Planner Phase 3: inferred values for ${Object.keys(inferred).length} params`);
+      }
+    } catch (err) {
+      logger.warn(`Planner Phase 3 failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   logger.info(`Planner complete: ${chains.length} chain(s), ${chains.reduce((s, c) => s + c.tools.length, 0)} tools`);
   return chains;
+}
+
+/** Find parameters that lack enums, examples, or defaults */
+function findParamsWithoutEnums(tools: ToolDefinition[]): Array<{ tool: string; param: string; type: string; context: string }> {
+  const result: Array<{ tool: string; param: string; type: string; context: string }> = [];
+
+  for (const tool of tools) {
+    const properties = tool.inputSchema?.properties as Record<string, Record<string, unknown>> | undefined;
+    if (!properties) continue;
+
+    for (const [paramName, paramSchema] of Object.entries(properties)) {
+      // Check nested object properties (like path_variables.module)
+      if (paramSchema.type === "object" && paramSchema.properties) {
+        const nested = paramSchema.properties as Record<string, Record<string, unknown>>;
+        for (const [nestedKey, nestedSchema] of Object.entries(nested)) {
+          if (nestedSchema.type === "string" && !nestedSchema.enum && !nestedSchema.default && !nestedSchema.const) {
+            result.push({
+              tool: tool.name,
+              param: `${paramName}.${nestedKey}`,
+              type: "string",
+              context: `${tool.name}: ${(tool.description ?? "").substring(0, 100)}`,
+            });
+          }
+        }
+      }
+      // Check flat string params
+      else if (paramSchema.type === "string" && !paramSchema.enum && !paramSchema.default && !paramSchema.const) {
+        result.push({
+          tool: tool.name,
+          param: paramName,
+          type: "string",
+          context: `${tool.name}: ${(tool.description ?? "").substring(0, 100)}`,
+        });
+      }
+    }
+  }
+
+  // Deduplicate by param name (same param across tools = same valid values)
+  const seen = new Set<string>();
+  return result.filter((p) => {
+    const key = p.param.split(".").pop()!;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /** Handle chains with >20 tools by splitting into sub-chunks */
