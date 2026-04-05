@@ -73,18 +73,22 @@ export class HtmlReporter extends BaseReporter {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; padding: 2rem; max-width: 1200px; margin: 0 auto; }
   h1 { font-size: 1.5rem; margin-bottom: 1rem; color: #38bdf8; }
-  .summary { background: #1e293b; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-  .summary dt { color: #94a3b8; font-size: 0.8rem; text-transform: uppercase; }
-  .summary dd { font-size: 1.1rem; font-weight: 600; }
+  .summary { background: #1e293b; border-radius: 8px; padding: 1.5rem; margin-bottom: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; overflow: hidden; }
+  .summary dl { min-width: 0; }
+  .summary dt { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.25rem; }
+  .summary dd { font-size: 0.95rem; font-weight: 600; word-break: break-all; overflow-wrap: anywhere; }
   .gate { background: #1e293b; border-radius: 8px; padding: 1.5rem; margin-bottom: 1rem; }
-  .gate h2 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 1.1rem; }
+  .gate h2 { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; font-size: 1.1rem; flex-wrap: wrap; }
   .duration { color: #64748b; font-size: 0.8rem; margin-left: auto; font-weight: normal; }
-  .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; color: white; }
-  table { width: 100%; border-collapse: collapse; }
+  .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; color: white; white-space: nowrap; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
   th { text-align: left; color: #94a3b8; font-size: 0.8rem; padding: 0.5rem; border-bottom: 1px solid #334155; }
-  td { padding: 0.5rem; border-bottom: 1px solid #1e293b; font-size: 0.9rem; }
+  th:nth-child(1) { width: 70px; }
+  th:nth-child(2) { width: 180px; }
+  th:nth-child(4) { width: 80px; }
+  td { padding: 0.5rem; border-bottom: 1px solid #1e293b; font-size: 0.9rem; word-break: break-word; overflow-wrap: anywhere; vertical-align: top; }
   .evidence { margin-top: 0.5rem; padding-left: 1.5rem; color: #94a3b8; font-size: 0.8rem; }
-  .evidence li { margin-bottom: 0.25rem; }
+  .evidence li { margin-bottom: 0.25rem; word-break: break-word; }
 </style></head>
 <body>
   <h1>MCPQA Pipeline Report</h1>
