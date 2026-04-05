@@ -18,6 +18,7 @@ export class DescriptionAccuracyValidator implements IValidator {
 
     const evidence: string[] = [];
     const scores: number[] = [];
+    let skippedError = 0;
     const perToolFixes: Array<{ tool: string; fixes: string[] }> = [];
     const llmConfig = (ctx.config.gates[4]?.validators?.["llm"] ?? {}) as Partial<LLMJudgeConfig>;
     const threshold = ((ctx.config.gates[4]?.validators?.["description-accuracy"] ?? {}) as Record<string, unknown>).threshold as number ?? 3;
@@ -43,6 +44,16 @@ export class DescriptionAccuracyValidator implements IValidator {
         ?.filter((c) => c.type === "text")
         .map((c) => c.text)
         .join("\n") ?? "No result";
+
+      // Detect if the invocation returned an error — skip LLM eval for error responses
+      const isErrorResponse = invocationResult.isError ||
+        /\b(error|failed|not found|not present|invalid|unauthorized|forbidden)\b/i.test(resultText.substring(0, 200));
+
+      if (isErrorResponse) {
+        evidence.push(`Tool "${tool.name}": SKIPPED — invocation returned error, not real data (${resultText.substring(0, 80)})`);
+        skippedError++;
+        continue;
+      }
 
       const prompt = descriptionAccuracyPrompt(
         tool.name, tool.description,
@@ -87,10 +98,18 @@ export class DescriptionAccuracyValidator implements IValidator {
     const failCount = scores.filter((s) => s < threshold).length;
     const partialCredit = toolsEvaluated > 0 ? passCount / toolsEvaluated : 0;
 
+    // If most tools were skipped due to error responses, report that clearly
+    const totalTools = ctx.toolDefinitions.filter((t) => t.description).length;
+    const skippedMessage = skippedError > 0
+      ? ` (${skippedError} skipped — invocations returned errors, not real data)`
+      : "";
+
     return {
       validatorName: this.name,
-      severity: failCount > 0 ? Severity.FAIL : avgScore >= 4 ? Severity.PASS : Severity.WARN,
-      message: `Average description accuracy: ${avgScore.toFixed(1)}/5 across ${toolsEvaluated} tools (${failCount} below threshold)`,
+      severity: toolsEvaluated === 0 && skippedError > 0
+        ? Severity.WARN  // All tools errored — can't evaluate, not a failure
+        : failCount > 0 ? Severity.FAIL : avgScore >= 4 ? Severity.PASS : Severity.WARN,
+      message: `Average description accuracy: ${avgScore.toFixed(1)}/5 across ${toolsEvaluated} tools (${failCount} below threshold)${skippedMessage}`,
       details: { avgScore, toolsEvaluated, failCount, threshold, perToolFixes },
       durationMs: 0,
       evidence,

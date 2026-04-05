@@ -104,11 +104,21 @@ export async function discoverChains(
   }
 
   // ── Phase 2: Discover dependencies per chain ─────
+  // Sub-chunk large chains to keep LLM output reliable
+  const MAX_TOOLS_PER_PHASE2 = 20;
   const chains: DependencyChain[] = [];
 
   for (const group of chainGroups) {
     const chainTools = tools.filter((t) => group.tools.includes(t.name));
     if (chainTools.length === 0) continue;
+
+    // Split large chains into sub-groups
+    if (chainTools.length > MAX_TOOLS_PER_PHASE2) {
+      logger.info(`Planner: splitting "${group.chainId}" (${chainTools.length} tools) into chunks of ${MAX_TOOLS_PER_PHASE2}`);
+      const subChains = await discoverLargeChain(group, chainTools, classifications, judge);
+      chains.push(...subChains);
+      continue;
+    }
 
     // Build compact schemas for just this chain's tools
     const chainSchemas = chainTools.map((t) => ({
@@ -194,6 +204,80 @@ export async function discoverChains(
 
   logger.info(`Planner complete: ${chains.length} chain(s), ${chains.reduce((s, c) => s + c.tools.length, 0)} tools`);
   return chains;
+}
+
+/** Handle chains with >20 tools by splitting into sub-chunks */
+async function discoverLargeChain(
+  group: { chainId: string; serviceName: string; tools: string[] },
+  chainTools: ToolDefinition[],
+  classifications: Record<string, ToolClassification>,
+  judge: LLMJudge
+): Promise<DependencyChain[]> {
+  const MAX = 20;
+  const chunks: ToolDefinition[][] = [];
+  for (let i = 0; i < chainTools.length; i += MAX) {
+    chunks.push(chainTools.slice(i, i + MAX));
+  }
+
+  const allChainTools: ChainTool[] = [];
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const chunkSchemas = chunk.map((t) => ({
+      name: t.name,
+      description: (t.description ?? "").substring(0, 150),
+      params: Object.keys((t.inputSchema?.properties ?? {}) as Record<string, unknown>),
+      inputSchema: t.inputSchema,
+    }));
+
+    const depPrompt = DEPENDENCY_PROMPT
+      .replace("{SERVICE_NAME}", `${group.serviceName} (part ${i + 1}/${chunks.length})`)
+      .replace("{TOOL_SCHEMAS}", JSON.stringify(chunkSchemas, null, 2));
+
+    try {
+      const depResponse = await judge.evaluate(depPrompt);
+      const depRaw = depResponse.raw ?? depResponse.reasoning;
+      const depJson = depRaw.match(/\{[\s\S]*\}/);
+
+      if (depJson) {
+        const parsed = JSON.parse(depJson[0]);
+        for (const t of (parsed.tools ?? [])) {
+          allChainTools.push({
+            name: t.name as string,
+            classification: classifications[t.name as string] ?? classifyByName(t.name as string),
+            layer: (t.layer as number) ?? 0,
+            dependencies: (t.dependencies ?? []) as ChainTool["dependencies"],
+            produces: (t.produces ?? []) as string[],
+            sideEffects: ["create", "update", "delete", "restore", "destructive"].includes(
+              classifications[t.name as string] ?? ""
+            ),
+          });
+        }
+        logger.info(`Planner Phase 2: chunk ${i + 1}/${chunks.length} — ${(parsed.tools ?? []).length} tools resolved`);
+      }
+    } catch (err) {
+      logger.warn(`Planner Phase 2 chunk ${i + 1} failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Fallback for this chunk
+      for (const t of chunk) {
+        allChainTools.push({
+          name: t.name,
+          classification: classifications[t.name] ?? classifyByName(t.name, t.description),
+          layer: (classifications[t.name] ?? classifyByName(t.name, t.description)) === "safe" ? 0 : 1,
+          dependencies: [],
+          produces: [],
+          sideEffects: (classifications[t.name] ?? classifyByName(t.name, t.description)) !== "safe",
+        });
+      }
+    }
+  }
+
+  return [{
+    chainId: group.chainId,
+    serviceName: group.serviceName,
+    tools: allChainTools,
+    rootTools: allChainTools.filter((t) => t.layer === 0).map((t) => t.name),
+    lifecycleOrder: allChainTools.map((t) => t.name),
+  }];
 }
 
 function buildFallbackChains(tools: ToolDefinition[]): DependencyChain[] {

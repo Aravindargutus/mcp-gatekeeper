@@ -201,28 +201,68 @@ export class ChainGenerator {
     const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
     if (!properties) return args;
 
+    const seedData = this.kb.getAllSeedData();
+
     for (const [paramName, paramSchema] of Object.entries(properties)) {
-      // Check if this param has a dependency mapping
-      const dep = chainTool.dependencies.find((d) => d.paramPath === paramName || d.paramPath.endsWith(`.${paramName}`));
+      // Handle nested object params (like Zoho's path_variables, query_params, body)
+      // Look inside the nested schema and fill each sub-property from seed data
+      if (paramSchema.type === "object" && paramSchema.properties) {
+        const nestedProps = paramSchema.properties as Record<string, Record<string, unknown>>;
+        const nested: Record<string, unknown> = {};
+        let foundAny = false;
 
-      if (dep) {
-        // Use real value from knowledge base
-        const value = this.kb.getSeedValue(dep.sourceFieldHint) ?? this.kb.getSeedValue(`test_${dep.sourceFieldHint}`);
-        if (value != null) {
-          args[paramName] = this.buildNestedValue(paramName, dep.paramPath, value, paramSchema);
-          continue;
+        for (const [nestedKey, nestedSchema] of Object.entries(nestedProps)) {
+          // Check dependency mapping first
+          const dep = chainTool.dependencies.find(
+            (d) => d.paramPath === `${paramName}.${nestedKey}` || d.sourceFieldHint === nestedKey
+          );
+          if (dep) {
+            const value = this.kb.getSeedValue(dep.sourceFieldHint) ?? this.kb.getSeedValue(`test_${dep.sourceFieldHint}`);
+            if (value != null) { nested[nestedKey] = value; foundAny = true; continue; }
+          }
+
+          // Fuzzy search seed data for matching key
+          for (const [seedKey, seedValue] of Object.entries(seedData)) {
+            const normalizedSeed = seedKey.toLowerCase().replace(/_/g, "");
+            const normalizedNested = nestedKey.toLowerCase().replace(/_/g, "");
+            if (normalizedSeed === normalizedNested ||
+                normalizedSeed.includes(normalizedNested) ||
+                (normalizedNested.includes(normalizedSeed) && normalizedSeed.length > 2)) {
+              nested[nestedKey] = seedValue; foundAny = true; break;
+            }
+          }
+
+          // Fall back to sample value for required nested params
+          if (!(nestedKey in nested)) {
+            nested[nestedKey] = this.generateSampleValue(nestedSchema);
+          }
         }
-      }
 
-      // Fall back: check if any seed data key matches this param name
-      const seedValue = this.kb.getSeedValue(paramName) ?? this.kb.getSeedValue(`test_${paramName}`);
-      if (seedValue != null) {
-        args[paramName] = seedValue;
+        if (foundAny || (schema.required as string[])?.includes(paramName)) {
+          args[paramName] = nested;
+        }
         continue;
       }
 
+      // Check if this param has a dependency mapping (flat params)
+      const dep = chainTool.dependencies.find((d) => d.paramPath === paramName || d.paramPath.endsWith(`.${paramName}`));
+
+      if (dep) {
+        const value = this.kb.getSeedValue(dep.sourceFieldHint) ?? this.kb.getSeedValue(`test_${dep.sourceFieldHint}`);
+        if (value != null) { args[paramName] = value; continue; }
+      }
+
+      // Fuzzy search seed data
+      for (const [seedKey, seedValue] of Object.entries(seedData)) {
+        const normalizedSeed = seedKey.toLowerCase().replace(/_/g, "");
+        const normalizedParam = paramName.toLowerCase().replace(/_/g, "");
+        if (normalizedSeed === normalizedParam) {
+          args[paramName] = seedValue; break;
+        }
+      }
+
       // Fall back: generate sample value from schema
-      if ((schema.required as string[])?.includes(paramName)) {
+      if (!(paramName in args) && (schema.required as string[])?.includes(paramName)) {
         args[paramName] = this.generateSampleValue(paramSchema);
       }
     }
