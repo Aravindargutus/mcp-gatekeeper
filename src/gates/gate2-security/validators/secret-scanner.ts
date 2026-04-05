@@ -71,6 +71,8 @@ export class SecretScannerValidator implements IValidator {
       for (const [key, value] of Object.entries(obj)) {
         // Skip description fields — they're expected to have varied content
         if (key === "description" || key === "name" || key === "title") continue;
+        // Skip enum arrays — they're declared public constants, not secrets
+        if (key === "enum" && Array.isArray(value)) continue;
         results.push(...this.extractStringValues(value, path ? `${path}.${key}` : key));
       }
     }
