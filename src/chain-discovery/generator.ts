@@ -201,9 +201,17 @@ export class ChainGenerator {
     const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
     if (!properties) return args;
 
+    const required = new Set((schema.required as string[]) ?? []);
     const seedData = this.kb.getAllSeedData();
 
+    // For Layer 0 discovery tools, ONLY send required params.
+    // Optional params with bad inferred values cause errors (e.g., feature_name).
+    const isDiscoveryTool = chainTool.layer === 0 && chainTool.classification === "safe";
+
     for (const [paramName, paramSchema] of Object.entries(properties)) {
+      // For discovery tools, skip optional params to avoid bad inferred values
+      if (isDiscoveryTool && !required.has(paramName)) continue;
+
       // Handle nested object params (like Zoho's path_variables, query_params, body)
       // Look inside the nested schema and fill each sub-property from seed data
       if (paramSchema.type === "object" && paramSchema.properties) {
