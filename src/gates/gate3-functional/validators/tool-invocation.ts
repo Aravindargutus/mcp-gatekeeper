@@ -1,9 +1,10 @@
 import type { IValidator } from "../../../core/interfaces.js";
 import type { ValidationContext } from "../../../core/context.js";
-import type { ValidatorResult } from "../../../core/types.js";
+import type { ValidatorResult, ToolDefinition } from "../../../core/types.js";
 import { Severity } from "../../../core/types.js";
 import { mapWithConcurrency } from "../../../utils/concurrency.js";
 import { logger } from "../../../utils/logger.js";
+import type { KnowledgeBase } from "../../../chain-discovery/knowledge-base.js";
 
 const CONCURRENCY = 10;
 
@@ -15,15 +16,22 @@ export class ToolInvocationValidator implements IValidator {
   async validate(ctx: ValidationContext): Promise<ValidatorResult> {
     const evidence: string[] = [];
     let failCount = 0;
+    const kb = ctx.knowledgeBase as KnowledgeBase | undefined;
 
-    logger.debug(`Invoking ${ctx.toolDefinitions.length} tools (concurrency: ${CONCURRENCY})`);
+    if (kb) {
+      logger.debug(`Invoking ${ctx.toolDefinitions.length} tools with knowledge base (${Object.keys(kb.getAllSeedData()).length} real IDs)`);
+    } else {
+      logger.debug(`Invoking ${ctx.toolDefinitions.length} tools with sample args (no knowledge base)`);
+    }
 
     const results = await mapWithConcurrency(
       ctx.toolDefinitions,
       CONCURRENCY,
       async (tool) => {
-        const sampleArgs = this.generateSampleArgs(tool.inputSchema);
-        const result = await ctx.connector.callTool(tool.name, sampleArgs);
+        const args = kb
+          ? this.buildArgsFromKnowledgeBase(tool, kb)
+          : this.generateSampleArgs(tool.inputSchema);
+        const result = await ctx.connector.callTool(tool.name, args);
         return { tool, result };
       }
     );
@@ -72,6 +80,72 @@ export class ToolInvocationValidator implements IValidator {
         ? (ctx.toolDefinitions.length - failCount) / ctx.toolDefinitions.length
         : 0,
     };
+  }
+
+  /**
+   * Build args using real IDs from the knowledge base.
+   * For each param, search the knowledge base seed data for a matching key.
+   * Falls back to generateValue() if no match found.
+   */
+  private buildArgsFromKnowledgeBase(
+    tool: ToolDefinition,
+    kb: KnowledgeBase
+  ): Record<string, unknown> {
+    const args: Record<string, unknown> = {};
+    const schema = tool.inputSchema;
+    const properties = schema.properties as Record<string, Record<string, unknown>> | undefined;
+    const required = (schema.required as string[]) ?? [];
+    if (!properties) return args;
+    const seedData = kb.getAllSeedData();
+
+    for (const [paramName, paramSchema] of Object.entries(properties)) {
+      // For object-type params (like path_variables, query_params), build nested values
+      if (paramSchema.type === "object" && paramSchema.properties) {
+        const nestedProps = paramSchema.properties as Record<string, Record<string, unknown>>;
+        const nested: Record<string, unknown> = {};
+        for (const [nestedKey, nestedSchema] of Object.entries(nestedProps)) {
+          // Search seed data for a matching key
+          const realValue = this.findInSeedData(nestedKey, seedData);
+          if (realValue != null) {
+            nested[nestedKey] = realValue;
+          } else if (required.includes(paramName)) {
+            nested[nestedKey] = this.generateValue(nestedSchema);
+          }
+        }
+        if (Object.keys(nested).length > 0) {
+          args[paramName] = nested;
+        }
+      } else {
+        // Simple param — check seed data first
+        const realValue = this.findInSeedData(paramName, seedData);
+        if (realValue != null) {
+          args[paramName] = realValue;
+        } else if (required.includes(paramName)) {
+          args[paramName] = this.generateValue(paramSchema);
+        }
+      }
+    }
+
+    return args;
+  }
+
+  /** Search seed data for a key that matches the param name (fuzzy) */
+  private findInSeedData(paramName: string, seedData: Record<string, unknown>): unknown {
+    // Exact match
+    if (paramName in seedData) return seedData[paramName];
+
+    // Fuzzy: remove common suffixes/prefixes and try
+    const normalized = paramName.toLowerCase().replace(/_/g, "");
+    for (const [key, value] of Object.entries(seedData)) {
+      const normalizedKey = key.toLowerCase().replace(/_/g, "");
+      if (normalizedKey === normalized) return value;
+      // Partial match: "portal_id" in seed matches "portal_id" param
+      if (normalizedKey.includes(normalized) || normalized.includes(normalizedKey)) {
+        if (Math.abs(normalizedKey.length - normalized.length) <= 3) return value;
+      }
+    }
+
+    return null;
   }
 
   private generateSampleArgs(schema: Record<string, unknown>): Record<string, unknown> {

@@ -1,58 +1,71 @@
 import type { ToolDefinition } from "../core/types.js";
 import { LLMJudge, type LLMJudgeConfig } from "../gates/gate4-semantic/llm-judge.js";
-import { KnowledgeBase, type DependencyChain, type ChainTool, type ToolClassification } from "./knowledge-base.js";
+import type { DependencyChain, ChainTool, ToolClassification } from "./knowledge-base.js";
 import { logger } from "../utils/logger.js";
 
-const PLANNER_PROMPT = `You are analyzing MCP tool schemas to build a dependency graph.
+/**
+ * Phase 1 prompt: Classify tools and group into service chains.
+ * Output is intentionally SMALL — just tool names and groups.
+ */
+const CLASSIFY_PROMPT = `Analyze these MCP tool names and descriptions. Group them by service/domain and classify each.
 
 TOOLS:
-{TOOL_SCHEMAS}
+{TOOL_LIST}
 
-Analyze ALL tools and respond in this EXACT JSON format (no markdown, no explanation — ONLY the JSON):
-
+Respond in EXACTLY this JSON format (no markdown, no explanation):
 {
   "chains": [
     {
-      "chainId": "service-name",
-      "serviceName": "Human readable service name",
-      "tools": [
-        {
-          "name": "exact_tool_name",
-          "classification": "safe|create|update|delete|restore|destructive",
-          "layer": 0,
-          "dependencies": [
-            {
-              "paramPath": "path_variables.portal_id",
-              "sourceToolName": "get_organization",
-              "sourceFieldHint": "portal_id"
-            }
-          ],
-          "produces": ["portal_id", "org_name"],
-          "sideEffects": false
-        }
-      ],
-      "rootTools": ["tool_names_with_no_dependencies"],
-      "lifecycleOrder": ["get_org", "get_projects", "create_project", "update_project", "delete_project"]
+      "chainId": "short-id",
+      "serviceName": "Human Name",
+      "tools": ["tool_name_1", "tool_name_2"]
     }
-  ]
+  ],
+  "classifications": {
+    "tool_name": "safe|create|update|delete|restore|destructive"
+  }
 }
 
-RULES:
-- classification: "safe" = read-only (get/list/search/fetch), "create" = creates data, "update" = modifies data, "delete" = removes/trashes data, "restore" = recovers deleted data, "destructive" = bulk/permanent delete (mass_delete, purge)
-- layer: 0 = no dependencies (can call immediately), 1 = depends on layer 0, 2 = depends on layer 1, etc.
-- dependencies: look at inputSchema params — if a tool needs "portal_id", find which OTHER tool produces it
-- produces: what ID fields would be in this tool's response (infer from the tool's purpose)
-- sideEffects: true for create/update/delete/restore, false for read-only
-- Group tools into chains by SERVICE (tools that share the same domain/IDs)
-- Every tool must appear in exactly one chain
-- Tools with no dependencies AND no relationship to others = put in a "standalone" chain`;
+Classifications: safe=read-only, create=makes data, update=modifies, delete=removes, restore=recovers, destructive=bulk/permanent`;
 
 /**
- * Planner — LLM-based dependency chain discovery.
+ * Phase 2 prompt: For ONE chain, discover dependencies between its tools.
+ * Much smaller scope = reliable JSON output.
+ */
+const DEPENDENCY_PROMPT = `Analyze the dependencies between these related MCP tools.
+
+SERVICE: {SERVICE_NAME}
+TOOLS:
+{TOOL_SCHEMAS}
+
+For each tool, identify:
+1. What parameters it needs from OTHER tools' responses
+2. What IDs/values it produces in its response
+3. What layer it's in (0=no deps, 1=needs layer 0, 2=needs layer 1)
+
+Respond in EXACTLY this JSON format (no markdown):
+{
+  "tools": [
+    {
+      "name": "tool_name",
+      "layer": 0,
+      "dependencies": [
+        {"paramPath": "path_variables.portal_id", "sourceToolName": "get_portal", "sourceFieldHint": "portal_id"}
+      ],
+      "produces": ["portal_id", "org_name"]
+    }
+  ],
+  "lifecycleOrder": ["get_portal", "get_projects", "create_task", "delete_task"]
+}`;
+
+/**
+ * Planner — Two-phase LLM-based chain discovery.
  *
- * Makes ONE LLM call to analyze ALL tool schemas and returns
- * the complete dependency graph. Result is cached in KnowledgeBase
- * and reused until tool schemas change.
+ * Phase 1 (1 LLM call): Classify + group ALL tools (small output)
+ * Phase 2 (1 LLM call per chain): Discover dependencies within each chain
+ *
+ * For 65 tools in 4 chains: 1 + 4 = 5 LLM calls total.
+ * Much more reliable than trying to produce 400+ lines of JSON in one shot.
  */
 export async function discoverChains(
   tools: ToolDefinition[],
@@ -60,56 +73,131 @@ export async function discoverChains(
 ): Promise<DependencyChain[]> {
   logger.info(`Planner: analyzing ${tools.length} tool schemas...`);
 
-  // Build compact schema representation for the prompt
-  const toolSchemas = tools.map((t) => ({
-    name: t.name,
-    description: (t.description ?? "").substring(0, 200),
-    inputSchema: t.inputSchema,
-  }));
-
-  const prompt = PLANNER_PROMPT.replace(
-    "{TOOL_SCHEMAS}",
-    JSON.stringify(toolSchemas, null, 2)
-  );
-
   const judge = new LLMJudge({ ...llmConfig, maxTokens: 4096, temperature: 0 });
 
-  // Use evaluate() but we parse the raw JSON response, not the SCORE/VERDICT format
-  const response = await judge.evaluate(prompt);
-  const rawText = response.raw ?? response.reasoning;
+  // ── Phase 1: Classify and group ──────────────────
+  const toolList = tools.map((t) =>
+    `- ${t.name}: ${(t.description ?? "").substring(0, 100)}`
+  ).join("\n");
 
-  // Extract JSON from the response (LLM might wrap it in markdown)
-  const jsonMatch = rawText.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) {
-    logger.error("Planner: LLM did not return valid JSON");
-    logger.debug(`Planner raw response: ${rawText.substring(0, 500)}`);
-    return buildFallbackChains(tools);
-  }
+  const classifyPrompt = CLASSIFY_PROMPT.replace("{TOOL_LIST}", toolList);
+  const classifyResponse = await judge.evaluate(classifyPrompt);
+  const classifyRaw = classifyResponse.raw ?? classifyResponse.reasoning;
 
-  try {
-    const parsed = JSON.parse(jsonMatch[0]);
-    const chains = parsed.chains as DependencyChain[];
+  let chainGroups: Array<{ chainId: string; serviceName: string; tools: string[] }>;
+  let classifications: Record<string, ToolClassification>;
 
-    if (!Array.isArray(chains) || chains.length === 0) {
-      logger.warn("Planner: LLM returned empty chains, using fallback");
+  const classifyJson = classifyRaw.match(/\{[\s\S]*\}/);
+  if (classifyJson) {
+    try {
+      const parsed = JSON.parse(classifyJson[0]);
+      chainGroups = parsed.chains ?? [];
+      classifications = parsed.classifications ?? {};
+      logger.info(`Planner Phase 1: ${chainGroups.length} chain(s), ${Object.keys(classifications).length} classified`);
+    } catch (err) {
+      logger.warn(`Planner Phase 1 parse failed: ${err instanceof Error ? err.message : String(err)}`);
       return buildFallbackChains(tools);
     }
-
-    logger.info(`Planner: discovered ${chains.length} chain(s) covering ${chains.reduce((s, c) => s + c.tools.length, 0)} tools`);
-    return chains;
-  } catch (err) {
-    logger.error(`Planner: failed to parse LLM response: ${err instanceof Error ? err.message : String(err)}`);
+  } else {
+    logger.warn("Planner Phase 1: no JSON in response");
     return buildFallbackChains(tools);
   }
+
+  // ── Phase 2: Discover dependencies per chain ─────
+  const chains: DependencyChain[] = [];
+
+  for (const group of chainGroups) {
+    const chainTools = tools.filter((t) => group.tools.includes(t.name));
+    if (chainTools.length === 0) continue;
+
+    // Build compact schemas for just this chain's tools
+    const chainSchemas = chainTools.map((t) => ({
+      name: t.name,
+      description: (t.description ?? "").substring(0, 150),
+      params: Object.keys((t.inputSchema?.properties ?? {}) as Record<string, unknown>),
+      inputSchema: t.inputSchema,
+    }));
+
+    const depPrompt = DEPENDENCY_PROMPT
+      .replace("{SERVICE_NAME}", group.serviceName)
+      .replace("{TOOL_SCHEMAS}", JSON.stringify(chainSchemas, null, 2));
+
+    try {
+      const depResponse = await judge.evaluate(depPrompt);
+      const depRaw = depResponse.raw ?? depResponse.reasoning;
+      const depJson = depRaw.match(/\{[\s\S]*\}/);
+
+      if (depJson) {
+        const parsed = JSON.parse(depJson[0]);
+        const depTools: ChainTool[] = (parsed.tools ?? []).map((t: Record<string, unknown>) => ({
+          name: t.name as string,
+          classification: classifications[t.name as string] ?? classifyByName(t.name as string),
+          layer: (t.layer as number) ?? 0,
+          dependencies: (t.dependencies ?? []) as ChainTool["dependencies"],
+          produces: (t.produces ?? []) as string[],
+          sideEffects: ["create", "update", "delete", "restore", "destructive"].includes(
+            classifications[t.name as string] ?? ""
+          ),
+        }));
+
+        chains.push({
+          chainId: group.chainId,
+          serviceName: group.serviceName,
+          tools: depTools,
+          rootTools: depTools.filter((t) => t.layer === 0).map((t) => t.name),
+          lifecycleOrder: (parsed.lifecycleOrder ?? depTools.map((t: ChainTool) => t.name)) as string[],
+        });
+
+        logger.info(`Planner Phase 2: chain "${group.chainId}" — ${depTools.length} tools, ${depTools.filter((t) => t.layer === 0).length} root(s)`);
+      }
+    } catch (err) {
+      logger.warn(`Planner Phase 2 failed for "${group.chainId}": ${err instanceof Error ? err.message : String(err)}`);
+      // Add chain with fallback classification
+      const fallbackTools: ChainTool[] = chainTools.map((t) => ({
+        name: t.name,
+        classification: classifications[t.name] ?? classifyByName(t.name, t.description),
+        layer: (classifications[t.name] ?? classifyByName(t.name, t.description)) === "safe" ? 0 : 1,
+        dependencies: [],
+        produces: [],
+        sideEffects: (classifications[t.name] ?? classifyByName(t.name, t.description)) !== "safe",
+      }));
+      chains.push({
+        chainId: group.chainId,
+        serviceName: group.serviceName,
+        tools: fallbackTools,
+        rootTools: fallbackTools.filter((t) => t.layer === 0).map((t) => t.name),
+        lifecycleOrder: fallbackTools.map((t) => t.name),
+      });
+    }
+  }
+
+  // Catch tools not in any chain
+  const coveredTools = new Set(chains.flatMap((c) => c.tools.map((t) => t.name)));
+  const uncovered = tools.filter((t) => !coveredTools.has(t.name));
+  if (uncovered.length > 0) {
+    logger.info(`Planner: ${uncovered.length} tool(s) not in any chain — adding as standalone`);
+    chains.push({
+      chainId: "standalone",
+      serviceName: "Standalone Tools",
+      tools: uncovered.map((t) => ({
+        name: t.name,
+        classification: classifications[t.name] ?? classifyByName(t.name, t.description),
+        layer: 0,
+        dependencies: [],
+        produces: [],
+        sideEffects: (classifications[t.name] ?? classifyByName(t.name, t.description)) !== "safe",
+      })),
+      rootTools: uncovered.map((t) => t.name),
+      lifecycleOrder: uncovered.map((t) => t.name),
+    });
+  }
+
+  logger.info(`Planner complete: ${chains.length} chain(s), ${chains.reduce((s, c) => s + c.tools.length, 0)} tools`);
+  return chains;
 }
 
-/**
- * Fallback chain builder — used when LLM fails.
- * Classifies tools by name heuristics and puts them all in one chain.
- */
 function buildFallbackChains(tools: ToolDefinition[]): DependencyChain[] {
   logger.warn("Planner: using heuristic fallback (no LLM)");
-
   const chainTools: ChainTool[] = tools.map((t) => ({
     name: t.name,
     classification: classifyByName(t.name, t.description),
@@ -121,7 +209,7 @@ function buildFallbackChains(tools: ToolDefinition[]): DependencyChain[] {
 
   return [{
     chainId: "fallback",
-    serviceName: "All Tools (fallback — LLM discovery failed)",
+    serviceName: "All Tools (fallback)",
     tools: chainTools,
     rootTools: chainTools.filter((t) => t.layer === 0).map((t) => t.name),
     lifecycleOrder: chainTools.map((t) => t.name),
