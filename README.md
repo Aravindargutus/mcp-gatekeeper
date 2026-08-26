@@ -27,7 +27,7 @@ npx mcpqa run --server-url https://your-mcp-server.com/mcp
 
 ## What It Catches
 
-Real findings from running against a production Zoho MCP server (65 tools):
+Real findings from running against a production MCP server (65 tools):
 
 | Finding | Gate | What It Means |
 |---|---|---|
