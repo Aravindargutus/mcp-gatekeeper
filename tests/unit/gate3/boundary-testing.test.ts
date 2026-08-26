@@ -33,7 +33,7 @@ describe("BoundaryTestingValidator", () => {
     const tools: ToolDefinition[] = [{
       name: "bad_tool", inputSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }, raw: {},
     }];
-    // MockConnector returns isError: false by default (simulating the Zoho bug)
+    
     const result = await validator.validate(makeCtx(tools));
     expect(result.severity).toBe(Severity.FAIL);
     expect(result.evidence.some((e) => e.includes("accepted empty args"))).toBe(true);
