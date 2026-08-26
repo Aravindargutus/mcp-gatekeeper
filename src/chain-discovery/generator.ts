@@ -212,7 +212,7 @@ export class ChainGenerator {
       // For discovery tools, skip optional params to avoid bad inferred values
       if (isDiscoveryTool && !required.has(paramName)) continue;
 
-      // Handle nested object params (like Zoho's path_variables, query_params, body)
+      // Handle nested object params (like path_variables, query_params, body)
       // Look inside the nested schema and fill each sub-property from seed data
       if (paramSchema.type === "object" && paramSchema.properties) {
         const nestedProps = paramSchema.properties as Record<string, Record<string, unknown>>;
